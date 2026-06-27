@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aaditya Photography</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📷</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,400&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -77,14 +78,14 @@
   .country-path{cursor:pointer; stroke:var(--line); stroke-width:0.6; transition:filter .2s, stroke .25s; vector-effect:non-scaling-stroke;}
   .country-path.active{stroke:var(--ink-dim);}
   .country-path.active:hover{stroke:var(--ink); filter:brightness(0.94) saturate(1.15);}
-  .country-path.inactive{fill:url(#dotPatternDim); stroke:var(--line); cursor:default;}
+  .country-path.inactive{fill:var(--bg); stroke:var(--line); cursor:default;}
   .ocean{fill:var(--bg);}
   .pin{cursor:pointer;}
-  .pin circle.ring{fill:none; stroke:var(--ink); stroke-width:1; opacity:0; transition:opacity .25s, r .25s;}
-  .pin circle.core{fill:var(--ink); transition:fill .2s, r .2s;}
+  .pin circle.ring{fill:none; stroke:var(--ink); stroke-width:1; opacity:0; transition:opacity .25s, transform .25s; vector-effect:non-scaling-stroke; transform-box:fill-box; transform-origin:center;}
+  .pin circle.core{fill:var(--ink); transition:fill .2s, transform .2s; transform-box:fill-box; transform-origin:center;}
   .pin.sub circle.core{fill:var(--rust);}
-  .pin:hover circle.ring{opacity:0.55; r:13;}
-  .pin:hover circle.core{r:4.5;}
+  .pin:hover circle.ring{opacity:0.55; transform:scale(1.45);}
+  .pin:hover circle.core{transform:scale(1.5);}
   .pin-label{
     font-family:var(--font-mono); font-size:9.5px; fill:var(--paper-dim);
     opacity:0; transition:opacity .2s; pointer-events:none;
@@ -163,6 +164,18 @@
   #lightbox .lb-cap{font-family:var(--font-mono); font-size:12px; color:var(--paper-dim); margin-top:16px;}
   #lightbox .lb-close{position:absolute; top:28px; right:36px; font-family:var(--font-mono); font-size:12px; cursor:pointer; color:var(--paper-dim);}
   #lightbox .lb-close:hover{color:var(--paper);}
+  #lightbox .lb-arrow{
+    position:absolute; top:50%; transform:translateY(-50%);
+    font-family:var(--font-display); font-size:48px; line-height:1; font-weight:300;
+    color:var(--paper-dim); cursor:pointer; padding:12px 18px; user-select:none;
+    transition:color .2s;
+  }
+  #lightbox .lb-arrow:hover{color:var(--paper);}
+  #lightbox .lb-prev{left:8px;}
+  #lightbox .lb-next{right:8px;}
+  @media (max-width:640px){
+    #lightbox .lb-arrow{font-size:34px; padding:8px 10px;}
+  }
 
   @media (max-width:640px){
     .thesis{display:none;}
@@ -205,7 +218,9 @@
 
   <div id="lightbox">
     <span class="lb-close" id="lbClose">close ✕</span>
+    <span class="lb-arrow lb-prev" id="lbPrev">‹</span>
     <img id="lbImg" src="" alt="">
+    <span class="lb-arrow lb-next" id="lbNext">›</span>
     <div class="lb-cap" id="lbCap"></div>
   </div>
 </div>
@@ -364,52 +379,15 @@ const breadcrumb = $('#breadcrumb');
 
 function project(lat,lng){ return PROJ([lng,lat]) ? {x:PROJ([lng,lat])[0], y:PROJ([lng,lat])[1]} : {x:0,y:0}; }
 
-/* shared patterns: dim (countries with no data yet) + ocean texture.
-   Active countries get their own pastel-tinted pattern, built per-country below. */
+/* Flat solid fills, no dot texture: active countries get their pastel
+   color, everything else (ocean + countries with no data yet) just
+   matches the page background so only the visited places stand out. */
 function buildDotPatterns(){
-  const defs = document.createElementNS(svgNS,'defs');
-  const specs = [
-    {id:'dotPatternDim', color:'var(--dot)', size:14, r:1.0},
-    {id:'dotPatternOcean', color:'var(--dot)', size:20, r:0.7},
-  ];
-  specs.forEach(s=>{
-    const pattern = document.createElementNS(svgNS,'pattern');
-    pattern.setAttribute('id',s.id);
-    pattern.setAttribute('width',s.size); pattern.setAttribute('height',s.size);
-    pattern.setAttribute('patternUnits','userSpaceOnUse');
-    const c = document.createElementNS(svgNS,'circle');
-    c.setAttribute('cx',s.size/6); c.setAttribute('cy',s.size/6); c.setAttribute('r',s.r);
-    c.setAttribute('fill',s.color);
-    pattern.appendChild(c);
-    defs.appendChild(pattern);
-  });
-  mapSvg.appendChild(defs);
-
   const oceanRect = document.createElementNS(svgNS,'rect');
   oceanRect.setAttribute('class','ocean');
   oceanRect.setAttribute('x','0'); oceanRect.setAttribute('y','0');
   oceanRect.setAttribute('width','1000'); oceanRect.setAttribute('height','500');
   mapSvg.appendChild(oceanRect);
-  const oceanDots = document.createElementNS(svgNS,'rect');
-  oceanDots.setAttribute('x','0'); oceanDots.setAttribute('y','0');
-  oceanDots.setAttribute('width','1000'); oceanDots.setAttribute('height','500');
-  oceanDots.setAttribute('fill','url(#dotPatternOcean)');
-  mapSvg.appendChild(oceanDots);
-}
-
-/* builds one densely-dotted pastel pattern per active country, so the
-   country reads as "illuminated" in its color while still carrying the
-   dot-grid texture rather than a flat wash. */
-function buildCountryPattern(defs, country){
-  const pattern = document.createElementNS(svgNS,'pattern');
-  pattern.setAttribute('id', `dot-${country.id}`);
-  pattern.setAttribute('width','9'); pattern.setAttribute('height','9');
-  pattern.setAttribute('patternUnits','userSpaceOnUse');
-  const c = document.createElementNS(svgNS,'circle');
-  c.setAttribute('cx','3'); c.setAttribute('cy','3'); c.setAttribute('r','3.3');
-  c.setAttribute('fill', country.color);
-  pattern.appendChild(c);
-  defs.appendChild(pattern);
 }
 
 let PROJ = null;
@@ -432,8 +410,7 @@ async function loadWorldGeometry(){
     p.setAttribute('class', 'country-path ' + (isActive?'active':'inactive'));
     if(isActive){
       const country = WORLD.find(c=>c.iso===iso);
-      buildCountryPattern(mapSvg.querySelector('defs'), country);
-      p.style.fill = `url(#dot-${country.id})`;
+      p.style.fill = country.color;
       p.addEventListener('click', (e)=> navigateTo([country.id], p));
     }
     countryLayer.appendChild(p);
@@ -446,29 +423,47 @@ pinsLayer.setAttribute('id','pinsLayer');
 
 function clearPins(){ pinsLayer.innerHTML=''; }
 
-function drawPin({x,y,name,sub,onClick,counterScale=1}){
+/* total photo count beneath a node — used to size pins so major hubs
+   (lots of regions/photos) read as visually more important than a
+   single-gallery stop. */
+function getWeight(node){
+  if(node.photos) return node.photos.length;
+  return node.regions.reduce((sum,child)=>sum+getWeight(child), 0);
+}
+function sizeMultiplierFor(node){
+  const w = getWeight(node);
+  return Math.max(1, Math.min(1 + Math.log2(Math.max(w,1))/3, 2.2));
+}
+
+/* Pin geometry is baked directly in viewBox units (radius, label offset,
+   font-size all divided by counterScale) rather than wrapped in a nested
+   "scale down to cancel the parent zoom" group. The old nested-transform
+   approach caused visible blur at high zoom — browsers render compounded
+   opposite-direction transforms (e.g. parent x14 + child x1/14) as a
+   rasterized intermediate layer rather than a crisp vector recompute, and
+   that's what looked blurry. Baking the math in up front avoids the second
+   transform layer entirely, so it's just one plain scale, same as the
+   country borders. */
+function drawPin({x,y,name,sub,onClick,counterScale=1,sizeMultiplier=1}){
   const g = document.createElementNS(svgNS,'g');
   g.setAttribute('class','pin'+(sub?' sub':''));
   g.setAttribute('transform',`translate(${x},${y})`);
 
-  /* inner group cancels out the parent map's zoom scale, so the pin and its
-     label always render at the same visual size on screen, no matter how
-     far the map is zoomed in. */
-  const inner = document.createElementNS(svgNS,'g');
-  inner.setAttribute('transform', `scale(${1/counterScale})`);
-
+  const k = sizeMultiplier/counterScale;
   const ring = document.createElementNS(svgNS,'circle');
-  ring.setAttribute('class','ring'); ring.setAttribute('r','9');
+  ring.setAttribute('class','ring'); ring.setAttribute('r', 9*k);
+  ring.style.transformOrigin = 'center';
   const core = document.createElementNS(svgNS,'circle');
-  core.setAttribute('class','core'); core.setAttribute('r','3');
+  core.setAttribute('class','core'); core.setAttribute('r', 3*k);
+  core.style.transformOrigin = 'center';
 
   const label = document.createElementNS(svgNS,'text');
   label.setAttribute('class','pin-label');
-  label.setAttribute('x','10'); label.setAttribute('y','4');
+  label.setAttribute('x', 10*k); label.setAttribute('y', 4*k);
+  label.style.fontSize = `${9.5*k}px`;
   label.textContent = name;
 
-  inner.appendChild(ring); inner.appendChild(core); inner.appendChild(label);
-  g.appendChild(inner);
+  g.appendChild(ring); g.appendChild(core); g.appendChild(label);
   g.addEventListener('click', (e)=>{ e.stopPropagation(); onClick(g); });
   pinsLayer.appendChild(g);
 }
@@ -586,6 +581,7 @@ function showBranch(path, fromEl){
   node.regions.forEach(child=>{
     const p = project(child.lat, child.lng);
     drawPin({ x:p.x, y:p.y, name:child.name, sub:true, counterScale:fit.scale,
+      sizeMultiplier:sizeMultiplierFor(child),
       onClick:(el)=>navigateTo([...path, child.id], el) });
   });
   mapSvg.appendChild(pinsLayer);
@@ -632,10 +628,10 @@ function showGallery(path, fromEl){
     $('#galleryTitle').textContent = leaf.name;
     const grid = $('#galleryGrid');
     grid.innerHTML='';
-    leaf.photos.forEach(photo=>{
+    leaf.photos.forEach((photo,i)=>{
       const fig = document.createElement('figure');
       fig.innerHTML = `<img src="${photo.src}" alt="${photo.cap}" loading="lazy"><figcaption>${photo.cap}</figcaption>`;
-      fig.addEventListener('click', ()=>openLightbox(photo));
+      fig.addEventListener('click', ()=>openLightbox(leaf.photos, i));
       grid.appendChild(fig);
     });
     $('#galleryView').classList.add('show');
@@ -643,14 +639,41 @@ function showGallery(path, fromEl){
   renderBreadcrumb();
 }
 
-function openLightbox(photo){
+/* lightbox now tracks the current gallery's full photo list + index,
+   so prev/next (and arrow keys) can step through without closing. */
+let lbPhotos = [];
+let lbIndex = 0;
+
+function openLightbox(photos, index){
+  lbPhotos = photos;
+  lbIndex = index;
+  renderLightboxPhoto();
+  $('#lightbox').classList.add('show');
+}
+function renderLightboxPhoto(){
+  const photo = lbPhotos[lbIndex];
   $('#lbImg').src = photo.src;
   $('#lbImg').alt = photo.cap;
   $('#lbCap').textContent = photo.cap;
-  $('#lightbox').classList.add('show');
+  const multiple = lbPhotos.length > 1;
+  $('#lbPrev').style.display = multiple ? 'block' : 'none';
+  $('#lbNext').style.display = multiple ? 'block' : 'none';
 }
+function lbStep(delta){
+  if(lbPhotos.length < 2) return;
+  lbIndex = (lbIndex + delta + lbPhotos.length) % lbPhotos.length;
+  renderLightboxPhoto();
+}
+$('#lbPrev').addEventListener('click', (e)=>{ e.stopPropagation(); lbStep(-1); });
+$('#lbNext').addEventListener('click', (e)=>{ e.stopPropagation(); lbStep(1); });
 $('#lbClose').addEventListener('click', ()=> $('#lightbox').classList.remove('show'));
 $('#lightbox').addEventListener('click', (e)=>{ if(e.target.id==='lightbox') $('#lightbox').classList.remove('show'); });
+document.addEventListener('keydown', (e)=>{
+  if(!$('#lightbox').classList.contains('show')) return;
+  if(e.key==='ArrowLeft') lbStep(-1);
+  else if(e.key==='ArrowRight') lbStep(1);
+  else if(e.key==='Escape') $('#lightbox').classList.remove('show');
+});
 $('#galleryBack').addEventListener('click', ()=> navigateTo(state.path.slice(0,-1)));
 
 /* coordinate readout on hover, using the real projection */
