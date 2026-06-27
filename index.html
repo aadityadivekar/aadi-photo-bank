@@ -185,7 +185,7 @@
 
   <div id="stage">
     <div id="mapViewport">
-      <svg id="mapSvg" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid slice"></svg>
+      <svg id="mapSvg" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet"></svg>
     </div>
   </div>
 
@@ -223,22 +223,22 @@ const WORLD = [
     regions:[
       { id:'seoul', name:'Seoul', lat:37.566, lng:126.978,
         photos:[
-          {src:'https://picsum.photos/seed/seoul1/900/1100', cap:'Jongno, dusk'},
-          {src:'https://picsum.photos/seed/seoul2/900/1100', cap:'Han River, overcast'},
-          {src:'https://picsum.photos/seed/seoul3/900/1100', cap:'Bukchon alley'},
-          {src:'https://picsum.photos/seed/seoul4/900/1100', cap:'Dongdaemun, night market'},
+          {src:'images/seoul-banpo-bridge-fountain.jpg', cap:'Banpo Bridge, rainbow fountain at night'},
+          {src:'images/seoul-namdaemun-market-pancake.jpg', cap:'Namdaemun Market, fresh potato pancake'},
+          {src:'images/seoul-starfield-library.jpg', cap:'Starfield Library, COEX'},
         ]},
       { id:'busan', name:'Busan', lat:35.18, lng:129.075,
         photos:[
-          {src:'https://picsum.photos/seed/busan1/900/1100', cap:'Gamcheon stairs'},
-          {src:'https://picsum.photos/seed/busan2/900/1100', cap:'Haeundae, low tide'},
-          {src:'https://picsum.photos/seed/busan3/900/1100', cap:'Jagalchi fish market'},
+          {src:'images/busan-songdo-cable-car-ring.jpg', cap:'Songdo cable car, framed view'},
+          {src:'images/busan-fishing-sunset.jpg', cap:'Fishing at sunset'},
+          {src:'images/busan-hanbok-silhouette-sunset.jpg', cap:'Hanbok silhouette, sunset'},
+          {src:'images/busan-volcanic-dome-mountain.jpg', cap:'Coastal mountain, dome silhouette'},
         ]},
       { id:'jeju', name:'Jeju Island', lat:33.4, lng:126.55,
         photos:[
-          {src:'https://picsum.photos/seed/jeju1/900/1100', cap:'Seongsan Ilchulbong, dawn'},
-          {src:'https://picsum.photos/seed/jeju2/900/1100', cap:'Basalt coastline'},
-          {src:'https://picsum.photos/seed/jeju3/900/1100', cap:'Haenyeo, returning'},
+          {src:'images/jeju-flight-over-city.jpg', cap:'Descending over Jeju City, storm light'},
+          {src:'images/jeju-green-tea-fields.jpg', cap:"O'Sulloc tea fields"},
+          {src:'images/jeju-volcanic-crater-trail.jpg', cap:'Volcanic crater, boardwalk trail'},
         ]},
     ]
   },
@@ -281,16 +281,14 @@ const WORLD = [
   {
     id:'switzerland', name:'Switzerland', iso:756, lat:46.8, lng:8.2, color:'#E7AFA6',
     regions:[
-      { id:'switzerland-all', name:'Zurich & the Alps', lat:46.7, lng:8.1,
+      { id:'switzerland-all', name:'Switzerland', lat:46.8, lng:8.0,
         photos:[
-          {src:'https://picsum.photos/seed/zurich1/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/zurich2/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/zurich3/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/zurich4/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/alps1/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/alps2/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/alps3/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/alps4/900/1100', cap:'Replace with your own image — caption here'},
+          {src:'images/switzerland-matterhorn-dusk.jpg', cap:'The Matterhorn, dusk'},
+          {src:'images/switzerland-chapel-bridge-lucerne.jpg', cap:'Chapel Bridge, Lucerne'},
+          {src:'images/switzerland-lucerne-old-town.jpg', cap:'Lucerne, old town'},
+          {src:'images/switzerland-bern-aare-river.jpg', cap:'Bern, the Aare river'},
+          {src:'images/switzerland-alpine-valley-cabin.jpg', cap:'Alpine valley, wooden cabin'},
+          {src:'images/switzerland-apple-strudel.jpg', cap:'Apple strudel'},
         ]},
     ]
   },
@@ -459,16 +457,35 @@ function fireIris(){
   iris.classList.add('firing');
 }
 
-function zoomTo(lat,lng,scale){
-  const rectBox = viewport.getBoundingClientRect();
-  const W = 1000, H = 500; // viewBox units == css px since svg is block at viewport size scaled by viewBox mapping... use viewport css size
-  // svg renders at viewport.clientWidth x clientHeight; viewBox stretches 1000x500 to fill that.
+/* With preserveAspectRatio="meet", the map content doesn't necessarily
+   fill the whole viewport box — on narrow/tall screens it's centered with
+   empty space above/below (or left/right on very wide screens). This
+   computes the actual rendered size + offset of the map content itself,
+   so zoom targeting and the coordinate readout stay accurate everywhere. */
+function getMapRenderRect(){
   const cssW = viewport.clientWidth, cssH = viewport.clientHeight;
+  const viewBoxAspect = 1000/500;
+  const containerAspect = cssW/cssH;
+  let width, height, offsetX=0, offsetY=0;
+  if(containerAspect > viewBoxAspect){
+    height = cssH;
+    width = height*viewBoxAspect;
+    offsetX = (cssW-width)/2;
+  } else {
+    width = cssW;
+    height = width/viewBoxAspect;
+    offsetY = (cssH-height)/2;
+  }
+  return { width, height, offsetX, offsetY, cssW, cssH };
+}
+
+function zoomTo(lat,lng,scale){
+  const r = getMapRenderRect();
   const p = project(lat,lng);
-  // convert viewBox coords to css px (pre-transform)
-  const X = p.x/1000*cssW, Y = p.y/500*cssH;
-  const tx = (cssW/2)/scale - X;
-  const ty = (cssH/2)/scale - Y;
+  const X = r.offsetX + p.x/1000*r.width;
+  const Y = r.offsetY + p.y/500*r.height;
+  const tx = (r.cssW/2)/scale - X;
+  const ty = (r.cssH/2)/scale - Y;
   mapSvg.style.transform = `scale(${scale}) translate(${tx}px, ${ty}px)`;
 }
 function zoomReset(){
@@ -613,10 +630,10 @@ viewport.addEventListener('mousemove', (e)=>{
   const translateMatch = mapSvg.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
   const tx = translateMatch ? parseFloat(translateMatch[1]) : 0;
   const ty = translateMatch ? parseFloat(translateMatch[2]) : 0;
-  const cssW = viewport.clientWidth, cssH = viewport.clientHeight;
+  const r = getMapRenderRect();
   const screenX = e.clientX-rect.left, screenY = e.clientY-rect.top;
   const X = screenX/scale - tx, Y = screenY/scale - ty;
-  const vbX = X/cssW*1000, vbY = Y/cssH*500;
+  const vbX = (X - r.offsetX)/r.width*1000, vbY = (Y - r.offsetY)/r.height*500;
   const inv = PROJ.invert([vbX,vbY]);
   if(inv){
     $('#coords').textContent = `LAT ${inv[1].toFixed(1)} / LNG ${inv[0].toFixed(1)}`;
