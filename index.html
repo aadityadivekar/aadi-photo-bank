@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aaditya Photography </title>
+<title>Aaditya Photography</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,400&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -74,7 +74,7 @@
     transition:transform 0.9s cubic-bezier(.65,0,.35,1);
     will-change:transform;
   }
-  .country-path{cursor:pointer; stroke:var(--line); stroke-width:0.6; transition:filter .2s, stroke .25s;}
+  .country-path{cursor:pointer; stroke:var(--line); stroke-width:0.6; transition:filter .2s, stroke .25s; vector-effect:non-scaling-stroke;}
   .country-path.active{stroke:var(--ink-dim);}
   .country-path.active:hover{stroke:var(--ink); filter:brightness(0.94) saturate(1.15);}
   .country-path.inactive{fill:url(#dotPatternDim); stroke:var(--line); cursor:default;}
@@ -175,8 +175,8 @@
 
 <div id="app">
   <header>
-    <div class="wordmark">ATLAS<span>·survey</span></div>
-    <div class="thesis">a photographic record of everywhere Aaditya took his Canon Rebel</div>
+    <div class="wordmark">Aaditya's <span>Atlas</span></div>
+    <div class="thesis">a photographic record of aadi's "canon rebel" journey.</div>
   </header>
 
   <div id="breadcrumb">
@@ -254,25 +254,19 @@ const WORLD = [
         ]},
       { id:'washington-dc', name:'Washington DC', lat:38.9072, lng:-77.0369,
         photos:[
-          {src:'https://picsum.photos/seed/dc1/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/dc2/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/dc3/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/dc4/900/1100', cap:'Replace with your own image — caption here'},
+          {src:'images/dc-supreme-court-tulips.jpg', cap:'Supreme Court, spring tulips'},
         ]},
     ]
   },
   {
     id:'switzerland', name:'Switzerland', iso:756, lat:46.8, lng:8.2, color:'#E7AFA6',
     regions:[
-      { id:'zurich', name:'Zurich', lat:47.3769, lng:8.5417,
+      { id:'switzerland-all', name:'Zurich & the Alps', lat:46.7, lng:8.1,
         photos:[
           {src:'https://picsum.photos/seed/zurich1/900/1100', cap:'Replace with your own image — caption here'},
           {src:'https://picsum.photos/seed/zurich2/900/1100', cap:'Replace with your own image — caption here'},
           {src:'https://picsum.photos/seed/zurich3/900/1100', cap:'Replace with your own image — caption here'},
           {src:'https://picsum.photos/seed/zurich4/900/1100', cap:'Replace with your own image — caption here'},
-        ]},
-      { id:'alps', name:'Swiss Alps', lat:46.0207, lng:7.7491,
-        photos:[
           {src:'https://picsum.photos/seed/alps1/900/1100', cap:'Replace with your own image — caption here'},
           {src:'https://picsum.photos/seed/alps2/900/1100', cap:'Replace with your own image — caption here'},
           {src:'https://picsum.photos/seed/alps3/900/1100', cap:'Replace with your own image — caption here'},
@@ -295,15 +289,12 @@ const WORLD = [
   {
     id:'puerto-rico', name:'Puerto Rico', iso:630, lat:18.2208, lng:-66.5901, color:'#A3CDC6',
     regions:[
-      { id:'san-juan', name:'San Juan', lat:18.4655, lng:-66.1057,
+      { id:'puerto-rico-all', name:'San Juan & El Yunque', lat:18.4, lng:-65.95,
         photos:[
           {src:'https://picsum.photos/seed/sanjuan1/900/1100', cap:'Replace with your own image — caption here'},
           {src:'https://picsum.photos/seed/sanjuan2/900/1100', cap:'Replace with your own image — caption here'},
           {src:'https://picsum.photos/seed/sanjuan3/900/1100', cap:'Replace with your own image — caption here'},
           {src:'https://picsum.photos/seed/sanjuan4/900/1100', cap:'Replace with your own image — caption here'},
-        ]},
-      { id:'el-yunque', name:'El Yunque', lat:18.32, lng:-65.78,
-        photos:[
           {src:'https://picsum.photos/seed/yunque1/900/1100', cap:'Replace with your own image — caption here'},
           {src:'https://picsum.photos/seed/yunque2/900/1100', cap:'Replace with your own image — caption here'},
           {src:'https://picsum.photos/seed/yunque3/900/1100', cap:'Replace with your own image — caption here'},
@@ -405,10 +396,16 @@ pinsLayer.setAttribute('id','pinsLayer');
 
 function clearPins(){ pinsLayer.innerHTML=''; }
 
-function drawPin({x,y,name,sub,onClick}){
+function drawPin({x,y,name,sub,onClick,counterScale=1}){
   const g = document.createElementNS(svgNS,'g');
   g.setAttribute('class','pin'+(sub?' sub':''));
   g.setAttribute('transform',`translate(${x},${y})`);
+
+  /* inner group cancels out the parent map's zoom scale, so the pin and its
+     label always render at the same visual size on screen, no matter how
+     far the map is zoomed in. */
+  const inner = document.createElementNS(svgNS,'g');
+  inner.setAttribute('transform', `scale(${1/counterScale})`);
 
   const ring = document.createElementNS(svgNS,'circle');
   ring.setAttribute('class','ring'); ring.setAttribute('r','9');
@@ -420,7 +417,8 @@ function drawPin({x,y,name,sub,onClick}){
   label.setAttribute('x','10'); label.setAttribute('y','4');
   label.textContent = name;
 
-  g.appendChild(ring); g.appendChild(core); g.appendChild(label);
+  inner.appendChild(ring); inner.appendChild(core); inner.appendChild(label);
+  g.appendChild(inner);
   g.addEventListener('click', (e)=>{ e.stopPropagation(); onClick(g); });
   pinsLayer.appendChild(g);
 }
@@ -498,37 +496,43 @@ function showCountry(countryId, fromEl){
   if(fromEl) setIrisOriginFromEvent(fromEl);
   fireIris();
   clearPins();
+  const fit = computeFit(country);
   country.regions.forEach(region=>{
     const p = project(region.lat, region.lng);
-    drawPin({ x:p.x, y:p.y, name:region.name, sub:true,
+    drawPin({ x:p.x, y:p.y, name:region.name, sub:true, counterScale:fit.scale,
       onClick:(el)=>showGallery(countryId, region.id, el) });
   });
   mapSvg.appendChild(pinsLayer);
-  setTimeout(()=>fitToRegions(country), 30);
+  setTimeout(()=>zoomTo(fit.lat, fit.lng, fit.scale), 30);
   renderBreadcrumb();
   $('#hint').textContent = `${country.regions.length} location${country.regions.length>1?'s':''} in ${country.name} · click to open`;
 }
 
 /* compute a bounding box around all of a country's regions (in viewBox px),
-   pick a center + scale that frames them with comfortable padding,
-   and clamp scale so very small clusters (e.g. one city) don't over-zoom
-   while very wide ones (e.g. coast-to-coast) don't clip off-screen. */
-function fitToRegions(country){
+   pick a center + scale that frames them with comfortable padding.
+   A single-region country (just one point, zero span) gets a fixed, modest
+   zoom rather than racing to the max clamp — that was the old over-zoom bug. */
+function computeFit(country){
   const pts = country.regions.map(r=>project(r.lat,r.lng));
   const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const spanX = Math.max(maxX-minX, 6); // floor so a single point still gets a sane scale
-  const spanY = Math.max(maxY-minY, 6);
-  const cssW = viewport.clientWidth, cssH = viewport.clientHeight;
-  const PAD = 3.0; // how much extra room around the regions, as a multiplier
-  const scaleX = cssW / (spanX/1000*cssW * PAD);
-  const scaleY = cssH / (spanY/500*cssH * PAD);
-  let scale = Math.min(scaleX, scaleY);
-  scale = Math.max(4, Math.min(scale, 28)); // clamp to a sane visual range
+  const rawSpanX = maxX-minX, rawSpanY = maxY-minY;
+  const isSinglePoint = rawSpanX < 0.5 && rawSpanY < 0.5;
   const centerLat = country.regions.reduce((s,r)=>s+r.lat,0)/country.regions.length;
   const centerLng = country.regions.reduce((s,r)=>s+r.lng,0)/country.regions.length;
-  zoomTo(centerLat, centerLng, scale);
+  if(isSinglePoint){
+    return { lat:centerLat, lng:centerLng, scale:6.5 };
+  }
+  const spanX = Math.max(rawSpanX, 18);
+  const spanY = Math.max(rawSpanY, 18);
+  const cssW = viewport.clientWidth, cssH = viewport.clientHeight;
+  const PAD = 3.0;
+  const scaleX = 1000 / (spanX*PAD);
+  const scaleY = 500 / (spanY*PAD);
+  let scale = Math.min(scaleX, scaleY);
+  scale = Math.max(4, Math.min(scale, 14));
+  return { lat:centerLat, lng:centerLng, scale };
 }
 
 function showGallery(countryId, regionId, fromEl){
