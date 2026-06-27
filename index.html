@@ -245,14 +245,32 @@ const WORLD = [
   {
     id:'usa', name:'United States', iso:840, lat:38.3, lng:-99.7, color:'#AECBE3',
     regions:[
-      { id:'bay-area', name:'Bay Area', lat:37.7749, lng:-122.4194,
-        photos:[
-          {src:'images/bayarea-golden-gate-golden-hour.jpg', cap:'Golden Gate Bridge, golden hour'},
-          {src:'images/bayarea-divisadero-skyline-view.jpg', cap:'Looking toward downtown from the hills'},
-          {src:'images/bayarea-de-young-garden-chair.jpg', cap:'de Young Museum, garden'},
-          {src:'images/bayarea-pacifica-fog.jpg', cap:'Pacifica, fog rolling in'},
-          {src:'images/bayarea-point-reyes-aerial-beach.jpg', cap:'Point Reyes, aerial coastline'},
-          {src:'images/bayarea-point-reyes-cypress-tunnel.jpg', cap:'Point Reyes, cypress tree tunnel'},
+      { id:'california', name:'California', lat:37.4, lng:-122.2,
+        regions:[
+          { id:'san-francisco', name:'San Francisco', lat:37.7749, lng:-122.4194,
+            photos:[
+              {src:'images/bayarea-golden-gate-golden-hour.jpg', cap:'Golden Gate Bridge, golden hour'},
+              {src:'images/bayarea-divisadero-skyline-view.jpg', cap:'Looking toward downtown from the hills'},
+              {src:'images/bayarea-de-young-garden-chair.jpg', cap:'de Young Museum, garden'},
+              {src:'images/bayarea-pacifica-fog.jpg', cap:'Pacifica, fog rolling in'},
+            ]},
+          { id:'santa-cruz', name:'Santa Cruz', lat:36.9741, lng:-122.0308,
+            photos:[
+              {src:'images/santacruz-surfer-statue.jpg', cap:'Surfer statue, dusk'},
+              {src:'images/santacruz-waterfront-sailboat.jpg', cap:'Waterfront, sailboat at sunset'},
+              {src:'images/santacruz-winery-vineyard.jpg', cap:'Santa Cruz Mountains, vineyard'},
+              {src:'images/santacruz-shark-tooth-cove.jpg', cap:'Shark Tooth Cove'},
+            ]},
+          { id:'monterey', name:'Monterey', lat:36.6002, lng:-121.8947,
+            photos:[
+              {src:'https://picsum.photos/seed/monterey1/900/1100', cap:'Replace with your own image — caption here'},
+              {src:'https://picsum.photos/seed/monterey2/900/1100', cap:'Replace with your own image — caption here'},
+            ]},
+          { id:'point-reyes', name:'Point Reyes', lat:38.0712, lng:-122.8047,
+            photos:[
+              {src:'images/bayarea-point-reyes-aerial-beach.jpg', cap:'Point Reyes, aerial coastline'},
+              {src:'images/bayarea-point-reyes-cypress-tunnel.jpg', cap:'Point Reyes, cypress tree tunnel'},
+            ]},
         ]},
       { id:'washington-dc', name:'Washington DC', lat:38.9072, lng:-77.0369,
         photos:[
@@ -386,7 +404,7 @@ async function loadWorldGeometry(){
       const country = WORLD.find(c=>c.iso===iso);
       buildCountryPattern(mapSvg.querySelector('defs'), country);
       p.style.fill = `url(#dot-${country.id})`;
-      p.addEventListener('click', (e)=> showCountry(country.id, p));
+      p.addEventListener('click', (e)=> navigateTo([country.id], p));
     }
     countryLayer.appendChild(p);
   });
@@ -426,7 +444,7 @@ function drawPin({x,y,name,sub,onClick,counterScale=1}){
 }
 
 /* ============== STATE / VIEWS ============== */
-let state = { view:'world', countryId:null, regionId:null };
+let state = { path: [] };
 
 function setIrisOriginFromEvent(el){
   const rect = el.getBoundingClientRect();
@@ -457,30 +475,47 @@ function zoomReset(){
   mapSvg.style.transform = 'scale(1) translate(0px,0px)';
 }
 
+/* ---- generic tree helpers ----
+   A node is either a "branch" (has .regions, e.g. a country or a state/area
+   grouping) or a "leaf" (has .photos, a city/gallery). path is an array of
+   ids from the top of WORLD down to the current node. */
+function getNode(path){
+  let node = WORLD.find(c=>c.id===path[0]);
+  for(let i=1;i<path.length;i++){ node = node.regions.find(r=>r.id===path[i]); }
+  return node;
+}
+function getNodeName(path){ return getNode(path).name; }
+
 function renderBreadcrumb(){
-  let html = `<span class="crumb ${state.view==='world'?'current':''}" data-go="world">world</span>`;
-  if(state.countryId){
-    const c = WORLD.find(c=>c.id===state.countryId);
-    html += `<span class="sep">/</span><span class="crumb ${state.view==='country'?'current':''}" data-go="country">${c.name}</span>`;
-  }
-  if(state.regionId){
-    const c = WORLD.find(c=>c.id===state.countryId);
-    const r = c.regions.find(r=>r.id===state.regionId);
-    html += `<span class="sep">/</span><span class="crumb current" data-go="gallery">${r.name}</span>`;
+  let html = `<span class="crumb ${state.path.length===0?'current':''}" data-depth="0">world</span>`;
+  for(let i=0;i<state.path.length;i++){
+    const subPath = state.path.slice(0,i+1);
+    const node = getNode(subPath);
+    const isCurrent = (i === state.path.length-1);
+    html += `<span class="sep">/</span><span class="crumb ${isCurrent?'current':''}" data-depth="${i+1}">${node.name}</span>`;
   }
   breadcrumb.innerHTML = html;
-  breadcrumb.classList.toggle('show', state.view!=='world');
+  breadcrumb.classList.toggle('show', state.path.length>0);
   breadcrumb.querySelectorAll('.crumb').forEach(el=>{
     el.addEventListener('click', ()=>{
-      const go = el.dataset.go;
-      if(go==='world') showWorld();
-      else if(go==='country') showCountry(state.countryId);
+      const depth = +el.dataset.depth;
+      navigateTo(state.path.slice(0, depth));
     });
   });
 }
 
+/* the single entry point for moving to any place in the hierarchy.
+   path=[] is the world view. A path ending on a leaf node (has .photos)
+   opens the gallery; otherwise it shows that node's children as pins. */
+function navigateTo(path, fromEl){
+  if(path.length===0){ showWorld(fromEl); return; }
+  const node = getNode(path);
+  if(node.photos){ showGallery(path, fromEl); }
+  else { showBranch(path, fromEl); }
+}
+
 function showWorld(fromEl){
-  state = { view:'world', countryId:null, regionId:null };
+  state = { path: [] };
   $('#galleryView').classList.remove('show');
   if(fromEl) setIrisOriginFromEvent(fromEl);
   fireIris();
@@ -491,44 +526,44 @@ function showWorld(fromEl){
   $('#hint').textContent = 'hover a highlighted country · click to descend';
 }
 
-function showCountry(countryId, fromEl){
-  const country = WORLD.find(c=>c.id===countryId);
-  state = { view:'country', countryId, regionId:null };
+function showBranch(path, fromEl){
+  const node = getNode(path);
+  state = { path };
   $('#galleryView').classList.remove('show');
   if(fromEl) setIrisOriginFromEvent(fromEl);
   fireIris();
   clearPins();
-  const fit = computeFit(country);
-  country.regions.forEach(region=>{
-    const p = project(region.lat, region.lng);
-    drawPin({ x:p.x, y:p.y, name:region.name, sub:true, counterScale:fit.scale,
-      onClick:(el)=>showGallery(countryId, region.id, el) });
+  const fit = computeFit(node);
+  node.regions.forEach(child=>{
+    const p = project(child.lat, child.lng);
+    drawPin({ x:p.x, y:p.y, name:child.name, sub:true, counterScale:fit.scale,
+      onClick:(el)=>navigateTo([...path, child.id], el) });
   });
   mapSvg.appendChild(pinsLayer);
   setTimeout(()=>zoomTo(fit.lat, fit.lng, fit.scale), 30);
   renderBreadcrumb();
-  $('#hint').textContent = `${country.regions.length} location${country.regions.length>1?'s':''} in ${country.name} · click to open`;
+  $('#hint').textContent = `${node.regions.length} location${node.regions.length>1?'s':''} in ${node.name} · click to open`;
 }
 
-/* compute a bounding box around all of a country's regions (in viewBox px),
+/* compute a bounding box around a branch node's children (in viewBox px),
    pick a center + scale that frames them with comfortable padding.
-   A single-region country (just one point, zero span) gets a fixed, modest
-   zoom rather than racing to the max clamp — that was the old over-zoom bug. */
-function computeFit(country){
-  const pts = country.regions.map(r=>project(r.lat,r.lng));
+   A single-child branch (just one point, zero span) gets a fixed, modest
+   zoom rather than racing to the max clamp. */
+function computeFit(node){
+  const children = node.regions;
+  const pts = children.map(r=>project(r.lat,r.lng));
   const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
   const rawSpanX = maxX-minX, rawSpanY = maxY-minY;
   const isSinglePoint = rawSpanX < 0.5 && rawSpanY < 0.5;
-  const centerLat = country.regions.reduce((s,r)=>s+r.lat,0)/country.regions.length;
-  const centerLng = country.regions.reduce((s,r)=>s+r.lng,0)/country.regions.length;
+  const centerLat = children.reduce((s,r)=>s+r.lat,0)/children.length;
+  const centerLng = children.reduce((s,r)=>s+r.lng,0)/children.length;
   if(isSinglePoint){
     return { lat:centerLat, lng:centerLng, scale:6.5 };
   }
   const spanX = Math.max(rawSpanX, 18);
   const spanY = Math.max(rawSpanY, 18);
-  const cssW = viewport.clientWidth, cssH = viewport.clientHeight;
   const PAD = 3.0;
   const scaleX = 1000 / (spanX*PAD);
   const scaleY = 500 / (spanY*PAD);
@@ -537,18 +572,18 @@ function computeFit(country){
   return { lat:centerLat, lng:centerLng, scale };
 }
 
-function showGallery(countryId, regionId, fromEl){
-  const country = WORLD.find(c=>c.id===countryId);
-  const region = country.regions.find(r=>r.id===regionId);
-  state = { view:'gallery', countryId, regionId };
+function showGallery(path, fromEl){
+  const leaf = getNode(path);
+  const parentPath = path.slice(0,-1);
+  state = { path };
   if(fromEl) setIrisOriginFromEvent(fromEl);
   fireIris();
   setTimeout(()=>{
-    $('#galleryMeta').textContent = country.name;
-    $('#galleryTitle').textContent = region.name;
+    $('#galleryMeta').textContent = parentPath.length ? getNodeName(parentPath) : '';
+    $('#galleryTitle').textContent = leaf.name;
     const grid = $('#galleryGrid');
     grid.innerHTML='';
-    region.photos.forEach(photo=>{
+    leaf.photos.forEach(photo=>{
       const fig = document.createElement('figure');
       fig.innerHTML = `<img src="${photo.src}" alt="${photo.cap}" loading="lazy"><figcaption>${photo.cap}</figcaption>`;
       fig.addEventListener('click', ()=>openLightbox(photo));
@@ -567,7 +602,7 @@ function openLightbox(photo){
 }
 $('#lbClose').addEventListener('click', ()=> $('#lightbox').classList.remove('show'));
 $('#lightbox').addEventListener('click', (e)=>{ if(e.target.id==='lightbox') $('#lightbox').classList.remove('show'); });
-$('#galleryBack').addEventListener('click', ()=> showCountry(state.countryId));
+$('#galleryBack').addEventListener('click', ()=> navigateTo(state.path.slice(0,-1)));
 
 /* coordinate readout on hover, using the real projection */
 viewport.addEventListener('mousemove', (e)=>{
