@@ -72,9 +72,13 @@
   #mapSvg{
     width:100%; height:100%; display:block;
     transform-origin:0 0;
-    transition:transform 0.9s cubic-bezier(.65,0,.35,1);
+    transition:transform 0.55s cubic-bezier(.22,.61,.36,1);
     will-change:transform;
+    shape-rendering:geometricPrecision;
+    text-rendering:optimizeLegibility;
   }
+  #mapSvg.zooming{ pointer-events:none; }
+  #mapSvg.zooming .pin{ cursor:default; }
   .country-path{cursor:pointer; stroke:var(--line); stroke-width:0.6; transition:filter .2s, stroke .25s; vector-effect:non-scaling-stroke;}
   .country-path.active{stroke:var(--ink-dim);}
   .country-path.active:hover{stroke:var(--ink); filter:brightness(0.94) saturate(1.15);}
@@ -262,55 +266,61 @@ const WORLD = [
     regions:[
       { id:'california', name:'California', lat:37.4, lng:-122.2,
         regions:[
-          { id:'san-francisco', name:'San Francisco', lat:37.7749, lng:-122.4194,
-            photos:[
-              {src:'images/bayarea-golden-gate-golden-hour.jpg', cap:'Golden Gate Bridge, golden hour'},
-              {src:'images/bayarea-divisadero-skyline-view.jpg', cap:'Looking toward downtown from the hills'},
-              {src:'images/bayarea-de-young-garden-chair.jpg', cap:'de Young Museum, garden'},
-              {src:'images/bayarea-pacifica-fog.jpg', cap:'Pacifica, fog rolling in'},
-              {src:'images/sf-city-hall-pioneer-monument.jpg', cap:'City Hall dome, Pioneer Monument'},
-              {src:'images/sf-fleet-week-airshow.jpg', cap:'Fleet Week air show'},
-              {src:'images/sf-ninth-circuit-courthouse.jpg', cap:'Ninth Circuit courthouse, marble corridor'},
+          { id:'bay-area', name:'Bay Area & Central Coast', lat:37.4, lng:-122.3,
+            regions:[
+              { id:'san-francisco', name:'San Francisco', lat:37.7749, lng:-122.4194,
+                photos:[
+                  {src:'images/bayarea-golden-gate-golden-hour.jpg', cap:'Golden Gate Bridge, golden hour'},
+                  {src:'images/bayarea-divisadero-skyline-view.jpg', cap:'Looking toward downtown from the hills'},
+                  {src:'images/bayarea-de-young-garden-chair.jpg', cap:'de Young Museum, garden'},
+                  {src:'images/bayarea-pacifica-fog.jpg', cap:'Pacifica, fog rolling in'},
+                  {src:'images/sf-city-hall-pioneer-monument.jpg', cap:'City Hall dome, Pioneer Monument'},
+                  {src:'images/sf-fleet-week-airshow.jpg', cap:'Fleet Week air show'},
+                  {src:'images/sf-ninth-circuit-courthouse.jpg', cap:'Ninth Circuit courthouse, marble corridor'},
+                ]},
+              { id:'palo-alto', name:'Palo Alto', lat:37.40, lng:-122.13,
+                photos:[
+                  {src:'images/paloalto-arastradero-coyote.jpg', cap:'Arastradero Preserve, coyote'},
+                  {src:'images/paloalto-shoreline-amphitheatre.jpg', cap:'Shoreline Amphitheatre, dusk'},
+                  {src:'images/paloalto-shoreline-sunset-sky.jpg', cap:'Shoreline, sunset sky'},
+                ]},
+              { id:'santa-cruz', name:'Santa Cruz', lat:36.9741, lng:-122.0308,
+                photos:[
+                  {src:'images/santacruz-surfer-statue.jpg', cap:'Surfer statue, dusk'},
+                  {src:'images/santacruz-waterfront-sailboat.jpg', cap:'Waterfront, sailboat at sunset'},
+                  {src:'images/santacruz-winery-vineyard.jpg', cap:'Santa Cruz Mountains, vineyard'},
+                  {src:'images/santacruz-shark-tooth-cove.jpg', cap:'Shark Tooth Cove'},
+                ]},
+              { id:'monterey', name:'Monterey', lat:36.6002, lng:-121.8947,
+                photos:[
+                  {src:'images/monterey-lone-cypress.jpg', cap:'The Lone Cypress, 17-Mile Drive'},
+                  {src:'images/monterey-17-mile-drive-beach.jpg', cap:'17-Mile Drive, beach stairway'},
+                ]},
+              { id:'point-reyes', name:'Point Reyes', lat:38.0712, lng:-122.8047,
+                photos:[
+                  {src:'images/bayarea-point-reyes-aerial-beach.jpg', cap:'Point Reyes, aerial coastline'},
+                  {src:'images/bayarea-point-reyes-cypress-tunnel.jpg', cap:'Point Reyes, cypress tree tunnel'},
+                ]},
             ]},
-          { id:'palo-alto', name:'Palo Alto', lat:37.40, lng:-122.13,
-            photos:[
-              {src:'images/paloalto-arastradero-coyote.jpg', cap:'Arastradero Preserve, coyote'},
-              {src:'images/paloalto-shoreline-amphitheatre.jpg', cap:'Shoreline Amphitheatre, dusk'},
-              {src:'images/paloalto-shoreline-sunset-sky.jpg', cap:'Shoreline, sunset sky'},
-            ]},
-          { id:'santa-cruz', name:'Santa Cruz', lat:36.9741, lng:-122.0308,
-            photos:[
-              {src:'images/santacruz-surfer-statue.jpg', cap:'Surfer statue, dusk'},
-              {src:'images/santacruz-waterfront-sailboat.jpg', cap:'Waterfront, sailboat at sunset'},
-              {src:'images/santacruz-winery-vineyard.jpg', cap:'Santa Cruz Mountains, vineyard'},
-              {src:'images/santacruz-shark-tooth-cove.jpg', cap:'Shark Tooth Cove'},
-            ]},
-          { id:'monterey', name:'Monterey', lat:36.6002, lng:-121.8947,
-            photos:[
-              {src:'images/monterey-lone-cypress.jpg', cap:'The Lone Cypress, 17-Mile Drive'},
-              {src:'images/monterey-17-mile-drive-beach.jpg', cap:'17-Mile Drive, beach stairway'},
-            ]},
-          { id:'point-reyes', name:'Point Reyes', lat:38.0712, lng:-122.8047,
-            photos:[
-              {src:'images/bayarea-point-reyes-aerial-beach.jpg', cap:'Point Reyes, aerial coastline'},
-              {src:'images/bayarea-point-reyes-cypress-tunnel.jpg', cap:'Point Reyes, cypress tree tunnel'},
-            ]},
-          { id:'san-diego', name:'San Diego', lat:32.7157, lng:-117.1611,
-            photos:[
-              {src:'images/sandiego-balboa-park-california-tower.jpg', cap:'Balboa Park, California Tower through the palms'},
-              {src:'images/sandiego-balboa-park-garden.jpg', cap:'Balboa Park, garden path'},
-              {src:'images/sandiego-balboa-park-architecture.jpg', cap:'Balboa Park, Spanish Colonial architecture'},
-              {src:'images/sandiego-downtown-skyline.jpg', cap:'Downtown San Diego, skyline'},
-              {src:'images/sandiego-city-view.jpg', cap:'San Diego, city view'},
-            ]},
-          { id:'san-marcos', name:'San Marcos', lat:33.1434, lng:-117.1661,
-            photos:[
-              {src:'images/sanmarcos-double-peak-lookout-tower-sunset.jpg', cap:'Double Peak Park, lookout tower at sunset'},
-              {src:'images/sanmarcos-double-peak-dusk-hills.jpg', cap:'Double Peak Park, dusk over the hills'},
-              {src:'images/sanmarcos-double-peak-golden-hour.jpg', cap:'Double Peak Park, golden hour'},
-              {src:'images/sanmarcos-double-peak-sunset-ridge.jpg', cap:'Double Peak Park, sunset ridgeline'},
-              {src:'images/sanmarcos-double-peak-hillside-trail.jpg', cap:'Double Peak Park, hillside trail at dusk'},
-              {src:'images/sanmarcos-double-peak-twilight.jpg', cap:'Double Peak Park, twilight'},
+          { id:'san-diego-county', name:'San Diego County', lat:32.93, lng:-117.16,
+            regions:[
+              { id:'san-diego', name:'San Diego', lat:32.7157, lng:-117.1611,
+                photos:[
+                  {src:'images/sandiego-balboa-park-california-tower.jpg', cap:'Balboa Park, California Tower through the palms'},
+                  {src:'images/sandiego-balboa-park-garden.jpg', cap:'Balboa Park, garden path'},
+                  {src:'images/sandiego-balboa-park-architecture.jpg', cap:'Balboa Park, Spanish Colonial architecture'},
+                  {src:'images/sandiego-downtown-skyline.jpg', cap:'Downtown San Diego, skyline'},
+                  {src:'images/sandiego-city-view.jpg', cap:'San Diego, city view'},
+                ]},
+              { id:'san-marcos', name:'San Marcos', lat:33.1434, lng:-117.1661,
+                photos:[
+                  {src:'images/sanmarcos-double-peak-lookout-tower-sunset.jpg', cap:'Double Peak Park, lookout tower at sunset'},
+                  {src:'images/sanmarcos-double-peak-dusk-hills.jpg', cap:'Double Peak Park, dusk over the hills'},
+                  {src:'images/sanmarcos-double-peak-golden-hour.jpg', cap:'Double Peak Park, golden hour'},
+                  {src:'images/sanmarcos-double-peak-sunset-ridge.jpg', cap:'Double Peak Park, sunset ridgeline'},
+                  {src:'images/sanmarcos-double-peak-hillside-trail.jpg', cap:'Double Peak Park, hillside trail at dusk'},
+                  {src:'images/sanmarcos-double-peak-twilight.jpg', cap:'Double Peak Park, twilight'},
+                ]},
             ]},
         ]},
       { id:'washington-dc', name:'Washington DC', lat:38.9072, lng:-77.0369,
@@ -467,6 +477,9 @@ function drawPin({x,y,name,sub,onClick,counterScale=1,sizeMultiplier=1}){
   g.setAttribute('transform',`translate(${x},${y})`);
 
   const k = sizeMultiplier/counterScale;
+  const hit = document.createElementNS(svgNS,'circle');
+  hit.setAttribute('class','hit'); hit.setAttribute('r', 16*k);
+  hit.setAttribute('fill','transparent');
   const ring = document.createElementNS(svgNS,'circle');
   ring.setAttribute('class','ring'); ring.setAttribute('r', 9*k);
   ring.style.transformOrigin = 'center';
@@ -480,7 +493,7 @@ function drawPin({x,y,name,sub,onClick,counterScale=1,sizeMultiplier=1}){
   label.style.fontSize = `${9.5*k}px`;
   label.textContent = name;
 
-  g.appendChild(ring); g.appendChild(core); g.appendChild(label);
+  g.appendChild(hit); g.appendChild(ring); g.appendChild(core); g.appendChild(label);
   g.addEventListener('click', (e)=>{ e.stopPropagation(); onClick(g); });
   pinsLayer.appendChild(g);
 }
@@ -523,6 +536,12 @@ function getMapRenderRect(){
   return { width, height, offsetX, offsetY, cssW, cssH };
 }
 
+let zoomSettleTimer = null;
+function lockDuringZoom(){
+  mapSvg.classList.add('zooming');
+  clearTimeout(zoomSettleTimer);
+  zoomSettleTimer = setTimeout(()=> mapSvg.classList.remove('zooming'), 600);
+}
 function zoomTo(lat,lng,scale){
   const r = getMapRenderRect();
   const p = project(lat,lng);
@@ -530,9 +549,11 @@ function zoomTo(lat,lng,scale){
   const Y = r.offsetY + p.y/500*r.height;
   const tx = (r.cssW/2)/scale - X;
   const ty = (r.cssH/2)/scale - Y;
+  lockDuringZoom();
   mapSvg.style.transform = `scale(${scale}) translate(${tx}px, ${ty}px)`;
 }
 function zoomReset(){
+  lockDuringZoom();
   mapSvg.style.transform = 'scale(1) translate(0px,0px)';
 }
 
