@@ -450,7 +450,7 @@ const countryLayer = document.createElementNS(svgNS,'g');
 countryLayer.setAttribute('id','countryLayer');
 
 async function loadWorldGeometry(){
-  const topoUrl = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
+  const topoUrl = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json';
   const topo = await fetch(topoUrl).then(r=>r.json());
   const geo = topojson.feature(topo, topo.objects.countries);
   PROJ = d3.geoNaturalEarth1().fitSize([1000,500], geo);
