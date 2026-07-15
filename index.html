@@ -84,17 +84,42 @@
   .country-path.active:hover{stroke:var(--ink); filter:brightness(0.94) saturate(1.15);}
   .country-path.inactive{fill:var(--bg); stroke:var(--line); cursor:default;}
   .ocean{fill:var(--bg);}
-  .pin{cursor:pointer;}
-  .pin circle.ring{fill:none; stroke:var(--ink); stroke-width:1; opacity:0; transition:opacity .25s, transform .25s; vector-effect:non-scaling-stroke; transform-box:fill-box; transform-origin:center;}
-  .pin circle.core{fill:var(--ink); transition:fill .2s, transform .2s; transform-box:fill-box; transform-origin:center;}
-  .pin.sub circle.core{fill:var(--rust);}
-  .pin:hover circle.ring{opacity:0.55; transform:scale(1.45);}
-  .pin:hover circle.core{transform:scale(1.5);}
-  .pin-label{
-    font-family:var(--font-mono); font-size:9.5px; fill:var(--paper-dim);
-    opacity:0; transition:opacity .2s; pointer-events:none;
+
+  /* ---------- PINS (real HTML, not scaled by the map's CSS transform —
+     this is what keeps labels crisp at any zoom level; text/circles drawn
+     inside a scaled SVG get rasterized by the browser's compositor during
+     and after the transform, which is what caused the persistent blur) --- */
+  #pinsHtml{ position:absolute; inset:0; z-index:20; pointer-events:none; }
+  #pinsHtml.zooming{ pointer-events:none; }
+  .pinh{
+    position:absolute; transform:translate(-50%,-50%);
+    display:flex; align-items:center; cursor:pointer; pointer-events:auto;
+    transition:left 0.55s cubic-bezier(.22,.61,.36,1), top 0.55s cubic-bezier(.22,.61,.36,1);
   }
-  .pin:hover .pin-label{opacity:1; fill:var(--paper);}
+  .pinh .dotwrap{ position:relative; width:18px; height:18px; flex:none; }
+  .pinh .ring{
+    position:absolute; inset:0; border-radius:50%; border:1px solid var(--ink);
+    opacity:0; transition:opacity .2s;
+  }
+  .pinh .core{
+    position:absolute; left:50%; top:50%; width:7px; height:7px; margin:-3.5px 0 0 -3.5px;
+    border-radius:50%; background:var(--ink);
+    transition:width .2s, height .2s, margin .2s;
+  }
+  .pinh.sub .core{ background:var(--rust); }
+  /* leader line — a short connector from dot to label, always drawn, so
+     it's unambiguous which pin a label belongs to even when several
+     dots sit close together on screen. */
+  .pinh .leader{ width:13px; height:1px; background:var(--line); flex:none; }
+  .pinh .lbl{
+    font-family:var(--font-mono); font-size:11px; color:var(--paper-dim);
+    white-space:nowrap; padding-left:6px;
+    opacity:.85; transition:opacity .2s, color .2s;
+  }
+  .pinh:hover .ring{ opacity:0.55; }
+  .pinh:hover .core{ width:9px; height:9px; margin:-4.5px 0 0 -4.5px; }
+  .pinh:hover .leader{ background:var(--ink-dim); }
+  .pinh:hover .lbl{ opacity:1; color:var(--paper); }
 
   /* ---------- APERTURE TRANSITION ---------- */
   #iris{
@@ -203,6 +228,7 @@
   <div id="stage">
     <div id="mapViewport">
       <svg id="mapSvg" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="pinsHtml"></div>
     </div>
   </div>
 
@@ -306,19 +332,16 @@ const WORLD = [
             regions:[
               { id:'san-diego', name:'San Diego', lat:32.7157, lng:-117.1611,
                 photos:[
-                  {src:'images/sandiego-balboa-park-california-tower.jpg', cap:'Balboa Park, California Tower through the palms'},
                   {src:'images/sandiego-balboa-park-garden.jpg', cap:'Balboa Park, garden path'},
                   {src:'images/sandiego-balboa-park-architecture.jpg', cap:'Balboa Park, Spanish Colonial architecture'},
-                  {src:'images/sandiego-downtown-skyline.jpg', cap:'Downtown San Diego, catching a flight'},
-                  {src:'images/sandiego-city-view.jpg', cap:'San Diego, Botanical Garden'},
+                  {src:'images/sandiego-downtown-skyline.jpg', cap:'Downtown San Diego, skyline'},
+                  {src:'images/sandiego-city-view.jpg', cap:'San Diego, city view'},
                 ]},
               { id:'san-marcos', name:'San Marcos', lat:33.1434, lng:-117.1661,
                 photos:[
                   {src:'images/sanmarcos-double-peak-lookout-tower-sunset.jpg', cap:'Double Peak Park, lookout tower at sunset'},
                   {src:'images/sanmarcos-double-peak-dusk-hills.jpg', cap:'Double Peak Park, dusk over the hills'},
-                  {src:'images/sanmarcos-double-peak-golden-hour.jpg', cap:'Double Peak Park, golden hour'},
                   {src:'images/sanmarcos-double-peak-sunset-ridge.jpg', cap:'Double Peak Park, sunset ridgeline'},
-                  {src:'images/sanmarcos-double-peak-hillside-trail.jpg', cap:'Double Peak Park, hillside trail at dusk'},
                   {src:'images/sanmarcos-double-peak-twilight.jpg', cap:'Double Peak Park, twilight'},
                 ]},
             ]},
@@ -445,10 +468,10 @@ async function loadWorldGeometry(){
   mapSvg.appendChild(countryLayer);
 }
 
-const pinsLayer = document.createElementNS(svgNS,'g');
-pinsLayer.setAttribute('id','pinsLayer');
+const pinsHtmlEl = $('#pinsHtml');
+let activePins = []; // {lat,lng,el}
 
-function clearPins(){ pinsLayer.innerHTML=''; }
+function clearPinsHtml(){ pinsHtmlEl.innerHTML=''; activePins = []; }
 
 /* total photo count beneath a node — used to size pins so major hubs
    (lots of regions/photos) read as visually more important than a
@@ -462,40 +485,63 @@ function sizeMultiplierFor(node){
   return Math.max(1, Math.min(1 + Math.log2(Math.max(w,1))/3, 2.2));
 }
 
-/* Pin geometry is baked directly in viewBox units (radius, label offset,
-   font-size all divided by counterScale) rather than wrapped in a nested
-   "scale down to cancel the parent zoom" group. The old nested-transform
-   approach caused visible blur at high zoom — browsers render compounded
-   opposite-direction transforms (e.g. parent x14 + child x1/14) as a
-   rasterized intermediate layer rather than a crisp vector recompute, and
-   that's what looked blurry. Baking the math in up front avoids the second
-   transform layer entirely, so it's just one plain scale, same as the
-   country borders. */
-function drawPin({x,y,name,sub,onClick,counterScale=1,sizeMultiplier=1}){
-  const g = document.createElementNS(svgNS,'g');
-  g.setAttribute('class','pin'+(sub?' sub':''));
-  g.setAttribute('transform',`translate(${x},${y})`);
+/* Convert a lat/lng into an on-screen pixel position given the map's
+   current CSS transform (scale + translate). Deriving this directly from
+   the same scale/translate values applied to #mapSvg keeps pins locked to
+   their geographic position while being plain, crisply-rendered HTML —
+   no compositor rasterization, no blur, at any zoom level. */
+function projectToScreen(lat,lng){
+  const r = getMapRenderRect();
+  const p = project(lat,lng);
+  const Px = r.offsetX + p.x/1000*r.width;
+  const Py = r.offsetY + p.y/500*r.height;
+  /* rounding to whole pixels matters here — a label sitting at a
+     fractional pixel position (e.g. left:214.6px) forces the browser to
+     antialias/subpixel-render the text, which reads as permanently
+     "slightly blurry" even with nothing animating. */
+  return { x: Math.round(viewT.s*(Px+viewT.tx)), y: Math.round(viewT.s*(Py+viewT.ty)) };
+}
 
-  const k = sizeMultiplier/counterScale;
-  const hit = document.createElementNS(svgNS,'circle');
-  hit.setAttribute('class','hit'); hit.setAttribute('r', 16*k);
-  hit.setAttribute('fill','transparent');
-  const ring = document.createElementNS(svgNS,'circle');
-  ring.setAttribute('class','ring'); ring.setAttribute('r', 9*k);
-  ring.style.transformOrigin = 'center';
-  const core = document.createElementNS(svgNS,'circle');
-  core.setAttribute('class','core'); core.setAttribute('r', 3*k);
-  core.style.transformOrigin = 'center';
+function repositionPinsHtml(){
+  activePins.forEach(pin=>{
+    const {x,y} = projectToScreen(pin.lat, pin.lng);
+    pin.el.style.left = x+'px';
+    pin.el.style.top = y+'px';
+  });
+}
 
-  const label = document.createElementNS(svgNS,'text');
-  label.setAttribute('class','pin-label');
-  label.setAttribute('x', 10*k); label.setAttribute('y', 4*k);
-  label.style.fontSize = `${9.5*k}px`;
-  label.textContent = name;
+function addPinHtml({lat,lng,name,sub,onClick,sizeMultiplier=1}){
+  const el = document.createElement('div');
+  el.className = 'pinh'+(sub?' sub':'');
 
-  g.appendChild(hit); g.appendChild(ring); g.appendChild(core); g.appendChild(label);
-  g.addEventListener('click', (e)=>{ e.stopPropagation(); onClick(g); });
-  pinsLayer.appendChild(g);
+  const dotwrap = document.createElement('div');
+  dotwrap.className = 'dotwrap';
+  dotwrap.style.width = (18*sizeMultiplier)+'px';
+  dotwrap.style.height = (18*sizeMultiplier)+'px';
+  const ring = document.createElement('span'); ring.className='ring';
+  const core = document.createElement('span'); core.className='core';
+  core.style.width = (7*sizeMultiplier)+'px';
+  core.style.height = (7*sizeMultiplier)+'px';
+  core.style.margin = (-3.5*sizeMultiplier)+'px 0 0 '+(-3.5*sizeMultiplier)+'px';
+  dotwrap.appendChild(ring); dotwrap.appendChild(core);
+
+  const leader = document.createElement('span');
+  leader.className = 'leader';
+
+  const lbl = document.createElement('span');
+  lbl.className = 'lbl';
+  lbl.style.fontSize = `${11*Math.min(sizeMultiplier,1.3)}px`;
+  lbl.textContent = name;
+
+  el.appendChild(dotwrap); el.appendChild(leader); el.appendChild(lbl);
+  el.addEventListener('click', (e)=>{ e.stopPropagation(); onClick(el); });
+  pinsHtmlEl.appendChild(el);
+
+  const pinData = { lat, lng, el };
+  activePins.push(pinData);
+  const {x,y} = projectToScreen(lat,lng);
+  el.style.left = x+'px'; el.style.top = y+'px';
+  return el;
 }
 
 /* ============== STATE / VIEWS ============== */
@@ -536,11 +582,16 @@ function getMapRenderRect(){
   return { width, height, offsetX, offsetY, cssW, cssH };
 }
 
+let viewT = { s:1, tx:0, ty:0 };
 let zoomSettleTimer = null;
 function lockDuringZoom(){
   mapSvg.classList.add('zooming');
+  pinsHtmlEl.classList.add('zooming');
   clearTimeout(zoomSettleTimer);
-  zoomSettleTimer = setTimeout(()=> mapSvg.classList.remove('zooming'), 600);
+  zoomSettleTimer = setTimeout(()=>{
+    mapSvg.classList.remove('zooming');
+    pinsHtmlEl.classList.remove('zooming');
+  }, 600);
 }
 function zoomTo(lat,lng,scale){
   const r = getMapRenderRect();
@@ -551,10 +602,14 @@ function zoomTo(lat,lng,scale){
   const ty = (r.cssH/2)/scale - Y;
   lockDuringZoom();
   mapSvg.style.transform = `scale(${scale}) translate(${tx}px, ${ty}px)`;
+  viewT = { s:scale, tx, ty };
+  repositionPinsHtml();
 }
 function zoomReset(){
   lockDuringZoom();
   mapSvg.style.transform = 'scale(1) translate(0px,0px)';
+  viewT = { s:1, tx:0, ty:0 };
+  repositionPinsHtml();
 }
 
 /* ---- generic tree helpers ----
@@ -602,8 +657,7 @@ function showWorld(fromEl){
   if(fromEl) setIrisOriginFromEvent(fromEl);
   fireIris();
   zoomReset();
-  clearPins();
-  mapSvg.appendChild(pinsLayer);
+  clearPinsHtml();
   renderBreadcrumb();
   $('#hint').textContent = 'hover a highlighted country · click to descend';
 }
@@ -614,15 +668,13 @@ function showBranch(path, fromEl){
   $('#galleryView').classList.remove('show');
   if(fromEl) setIrisOriginFromEvent(fromEl);
   fireIris();
-  clearPins();
+  clearPinsHtml();
   const fit = computeFit(node);
   node.regions.forEach(child=>{
-    const p = project(child.lat, child.lng);
-    drawPin({ x:p.x, y:p.y, name:child.name, sub:true, counterScale:fit.scale,
+    addPinHtml({ lat:child.lat, lng:child.lng, name:child.name, sub:true,
       sizeMultiplier:sizeMultiplierFor(child),
       onClick:(el)=>navigateTo([...path, child.id], el) });
   });
-  mapSvg.appendChild(pinsLayer);
   setTimeout(()=>zoomTo(fit.lat, fit.lng, fit.scale), 30);
   renderBreadcrumb();
   $('#hint').textContent = `${node.regions.length} location${node.regions.length>1?'s':''} in ${node.name} · click to open`;
@@ -732,6 +784,8 @@ viewport.addEventListener('mousemove', (e)=>{
     $('#coords').textContent = `LAT ${inv[1].toFixed(1)} / LNG ${inv[0].toFixed(1)}`;
   }
 });
+
+window.addEventListener('resize', ()=> repositionPinsHtml());
 
 /* init */
 buildDotPatterns();
