@@ -92,32 +92,37 @@
   #pinsHtml{ position:absolute; inset:0; z-index:20; pointer-events:none; }
   #pinsHtml.zooming{ pointer-events:none; }
   .pinh{
-    position:absolute; transform:translate(-50%,-50%);
-    display:flex; align-items:center; cursor:pointer; pointer-events:auto;
+    position:absolute; cursor:pointer; pointer-events:auto;
     transition:left 0.55s cubic-bezier(.22,.61,.36,1), top 0.55s cubic-bezier(.22,.61,.36,1);
   }
-  .pinh .dotwrap{ position:relative; width:18px; height:18px; flex:none; }
+  /* dotwrap/leader/lbl are positioned via inline left/top set in JS,
+     relative to .pinh's own (0,0) — which IS the exact geo coordinate.
+     Only dotwrap is offset by -50% of its own size to center the dot on
+     that point; leader + label extend rightward from the dot's edge and
+     never affect where the dot itself sits. */
+  .pinh .dotwrap{ position:absolute; top:0; }
   .pinh .ring{
     position:absolute; inset:0; border-radius:50%; border:1px solid var(--ink);
     opacity:0; transition:opacity .2s;
   }
   .pinh .core{
-    position:absolute; left:50%; top:50%; width:7px; height:7px; margin:-3.5px 0 0 -3.5px;
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
     border-radius:50%; background:var(--ink);
-    transition:width .2s, height .2s, margin .2s;
+    transition:transform .2s;
   }
   .pinh.sub .core{ background:var(--rust); }
   /* leader line — a short connector from dot to label, always drawn, so
      it's unambiguous which pin a label belongs to even when several
      dots sit close together on screen. */
-  .pinh .leader{ width:13px; height:1px; background:var(--line); flex:none; }
+  .pinh .leader{ position:absolute; top:0; transform:translateY(-50%); height:1px; background:var(--line); }
   .pinh .lbl{
+    position:absolute; top:0; transform:translateY(-50%);
     font-family:var(--font-mono); font-size:11px; color:var(--paper-dim);
     white-space:nowrap; padding-left:6px;
     opacity:.85; transition:opacity .2s, color .2s;
   }
   .pinh:hover .ring{ opacity:0.55; }
-  .pinh:hover .core{ width:9px; height:9px; margin:-4.5px 0 0 -4.5px; }
+  .pinh:hover .core{ transform:translate(-50%,-50%) scale(1.3); }
   .pinh:hover .leader{ background:var(--ink-dim); }
   .pinh:hover .lbl{ opacity:1; color:var(--paper); }
 
@@ -514,22 +519,29 @@ function addPinHtml({lat,lng,name,sub,onClick,sizeMultiplier=1}){
   const el = document.createElement('div');
   el.className = 'pinh'+(sub?' sub':'');
 
+  const dotSize = 18*sizeMultiplier;
+  const coreSize = 7*sizeMultiplier;
+  const leaderW = 13;
+
   const dotwrap = document.createElement('div');
   dotwrap.className = 'dotwrap';
-  dotwrap.style.width = (18*sizeMultiplier)+'px';
-  dotwrap.style.height = (18*sizeMultiplier)+'px';
+  dotwrap.style.width = dotSize+'px';
+  dotwrap.style.height = dotSize+'px';
+  dotwrap.style.left = (-dotSize/2)+'px'; // centers the dot exactly on (0,0), i.e. the geo point
   const ring = document.createElement('span'); ring.className='ring';
   const core = document.createElement('span'); core.className='core';
-  core.style.width = (7*sizeMultiplier)+'px';
-  core.style.height = (7*sizeMultiplier)+'px';
-  core.style.margin = (-3.5*sizeMultiplier)+'px 0 0 '+(-3.5*sizeMultiplier)+'px';
+  core.style.width = coreSize+'px';
+  core.style.height = coreSize+'px';
   dotwrap.appendChild(ring); dotwrap.appendChild(core);
 
   const leader = document.createElement('span');
   leader.className = 'leader';
+  leader.style.left = (dotSize/2)+'px'; // starts right at the dot's edge, not affected by dot centering
+  leader.style.width = leaderW+'px';
 
   const lbl = document.createElement('span');
   lbl.className = 'lbl';
+  lbl.style.left = (dotSize/2 + leaderW)+'px';
   lbl.style.fontSize = `${11*Math.min(sizeMultiplier,1.3)}px`;
   lbl.textContent = name;
 
