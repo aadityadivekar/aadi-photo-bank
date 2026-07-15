@@ -67,7 +67,7 @@
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
   }
   #mapViewport{
-    width:100%; height:100%; position:relative; overflow:hidden;
+    width:100%; height:100%; position:relative; overflow:hidden; touch-action:none;
   }
   #mapSvg{
     width:100%; height:100%; display:block;
@@ -528,6 +528,7 @@ function addPinHtml({lat,lng,name,sub,onClick,sizeMultiplier=1}){
   dotwrap.style.width = dotSize+'px';
   dotwrap.style.height = dotSize+'px';
   dotwrap.style.left = (-dotSize/2)+'px'; // centers the dot exactly on (0,0), i.e. the geo point
+  dotwrap.style.top = (-dotSize/2)+'px';  // (vertical centering — was missing, which is why dots sat below their lines)
   const ring = document.createElement('span'); ring.className='ring';
   const core = document.createElement('span'); core.className='core';
   core.style.width = coreSize+'px';
@@ -623,6 +624,48 @@ function zoomReset(){
   viewT = { s:1, tx:0, ty:0 };
   repositionPinsHtml();
 }
+
+/* ---------- Trackpad pinch-zoom / two-finger pan ----------
+   Browsers report a trackpad pinch gesture as a wheel event with
+   ctrlKey=true (this is the same convention Google Maps, Mapbox, etc.
+   rely on) — deltaY carries the zoom amount. A plain two-finger scroll
+   (no ctrlKey) is a pan. This layers on top of the existing click-to-
+   navigate system: scrolling just lets you look around freely without
+   changing which breadcrumb level you're "in". */
+const MIN_SCALE = 1, MAX_SCALE = 40;
+let wheelIdleTimer = null;
+
+function applyViewT(){
+  mapSvg.style.transform = `scale(${viewT.s}) translate(${viewT.tx}px, ${viewT.ty}px)`;
+  repositionPinsHtml();
+}
+
+viewport.addEventListener('wheel', (e)=>{
+  e.preventDefault();
+  /* while actively scrolling, drop the CSS transition so the map tracks
+     the gesture 1:1 instead of lagging behind through a .55s ease —
+     restored once the gesture stops so click-navigation keeps its
+     smooth animated zoom. */
+  mapSvg.style.transition = 'none';
+  clearTimeout(wheelIdleTimer);
+  wheelIdleTimer = setTimeout(()=>{ mapSvg.style.transition = ''; }, 150);
+
+  const rect = viewport.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+
+  if(e.ctrlKey){
+    const factor = Math.exp(-e.deltaY * 0.012);
+    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, viewT.s*factor));
+    const worldX = cx/viewT.s - viewT.tx, worldY = cy/viewT.s - viewT.ty;
+    viewT.tx = cx/newScale - worldX;
+    viewT.ty = cy/newScale - worldY;
+    viewT.s = newScale;
+  } else {
+    viewT.tx -= e.deltaX/viewT.s;
+    viewT.ty -= e.deltaY/viewT.s;
+  }
+  applyViewT();
+}, { passive:false });
 
 /* ---- generic tree helpers ----
    A node is either a "branch" (has .regions, e.g. a country or a state/area
