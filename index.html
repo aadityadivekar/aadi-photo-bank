@@ -182,6 +182,9 @@
   }
   .gallery-grid img{width:100%; display:block; aspect-ratio:4/5; object-fit:cover; transition:transform .5s; filter:grayscale(0.1) contrast(1.05);}
   .gallery-grid figure:hover img{transform:scale(1.04);}
+  .gallery-grid img.flip{transform:rotate(180deg);}
+  .gallery-grid figure:hover img.flip{transform:rotate(180deg) scale(1.04);}
+  #lbImg.flip{transform:rotate(180deg);}
   .gallery-grid figcaption{
     position:absolute; bottom:0; left:0; right:0; padding:14px;
     font-family:var(--font-mono); font-size:11px; color:var(--paper);
@@ -307,13 +310,14 @@ const WORLD = [
                   {src:'images/bayarea-pacifica-fog.jpg', cap:'Pacifica, fog rolling in'},
                   {src:'images/sf-city-hall-pioneer-monument.jpg', cap:'City Hall dome, Pioneer Monument'},
                   {src:'images/sf-fleet-week-airshow.jpg', cap:'Fleet Week air show'},
-                  {src:'images/sf-ninth-circuit-courthouse.jpg', cap:'Ninth Circuit courthouse, marble corridor'},
+                  {src:'images/sf-ninth-circuit-courthouse.jpg', cap:'Ninth Circuit courthouse, marble corridor', flip:true},
                 ]},
               { id:'palo-alto', name:'Palo Alto', lat:37.40, lng:-122.13,
                 photos:[
                   {src:'images/paloalto-arastradero-coyote.jpg', cap:'Arastradero Preserve, coyote'},
                   {src:'images/paloalto-shoreline-amphitheatre.jpg', cap:'Shoreline Amphitheatre, dusk'},
                   {src:'images/paloalto-shoreline-sunset-sky.jpg', cap:'Shoreline, sunset sky'},
+                  {src:'images/paloalto-hotel-california-california-ave.jpg', cap:'Hotel California, California Ave'},
                 ]},
               { id:'santa-cruz', name:'Santa Cruz', lat:36.9741, lng:-122.0308,
                 photos:[
@@ -355,7 +359,7 @@ const WORLD = [
         photos:[
           {src:'images/dc-supreme-court-tulips.jpg', cap:'Supreme Court, spring tulips'},
           {src:'images/dc-treasury-department-magnolia.jpg', cap:'Treasury Department, magnolia blooms'},
-          {src:'images/dc-washington-post-building-night.jpg', cap:'The Washington Post building, night'},
+          {src:'images/dc-washington-post-building-night.jpg', cap:'The Washington Post building, night — "Democracy Dies in Darkness"'},
           {src:'images/dc-arlington-tomb-unknown-soldier.jpg', cap:'Tomb of the Unknown Soldier, Arlington'},
         ]},
     ]
@@ -775,7 +779,7 @@ function showGallery(path, fromEl){
     grid.innerHTML='';
     leaf.photos.forEach((photo,i)=>{
       const fig = document.createElement('figure');
-      fig.innerHTML = `<img src="${photo.src}" alt="${photo.cap}" loading="lazy"><figcaption>${photo.cap}</figcaption>`;
+      fig.innerHTML = `<img src="${photo.src}" alt="${photo.cap}" loading="lazy"${photo.flip?' class="flip"':''}><figcaption>${photo.cap}</figcaption>`;
       fig.addEventListener('click', ()=>openLightbox(leaf.photos, i));
       grid.appendChild(fig);
     });
@@ -800,6 +804,7 @@ function renderLightboxPhoto(){
   $('#lbImg').src = photo.src;
   $('#lbImg').alt = photo.cap;
   $('#lbCap').textContent = photo.cap;
+  $('#lbImg').classList.toggle('flip', !!photo.flip);
   const multiple = lbPhotos.length > 1;
   $('#lbPrev').style.display = multiple ? 'block' : 'none';
   $('#lbNext').style.display = multiple ? 'block' : 'none';
