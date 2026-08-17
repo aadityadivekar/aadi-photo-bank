@@ -270,6 +270,29 @@
     #mobileNav{padding:96px 18px 60px;}
     .mnav-title{font-size:24px;}
   }
+
+  /* soft frosted pill behind the wordmark on mobile, so it stays legible
+     scrolling over photo thumbnails/varied backgrounds beneath it */
+  body.mobile-mode .wordmark{
+    display:inline-block; padding:7px 14px; margin:-7px -14px;
+    border-radius:20px;
+    background:rgba(243,238,226,0.62);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  }
+
+  /* per-country outline icon in the mobile list, traced from real border
+     geometry and filled with that country's map color — same color cue
+     as the desktop map's fill, just shrunk to an icon. */
+  .mnav-flag{width:26px; height:19px; flex:none; display:block;}
+  .mnav-flag path{stroke:var(--paper); stroke-width:0.4; stroke-opacity:.25;}
+  .mnav-swatch{width:9px; height:9px; border-radius:50%; flex:none;} /* fallback if a border trace fails to load */
+
+  /* branch rows (things that expand further) get a small "N collections"
+     line, mirroring the leaf rows' "N photos" — same visual language, so
+     it reads as "there's more inside" rather than a dead-end label. */
+  .mnav-branch-info{display:flex; flex-direction:column; gap:2px; min-width:0;}
+  .mnav-count{font-family:var(--font-mono); font-size:10.5px; color:var(--paper-dim); font-weight:400; letter-spacing:.01em;}
+  .mnav-loading{font-family:var(--font-mono); font-size:12px; color:var(--paper-dim); padding:20px 2px;}
 </style>
 </head>
 <body>
@@ -486,22 +509,6 @@ const WORLD = [
           {src:'images/kamakura-lotus-pond.jpg', cap:'Lotus pond'},
           {src:'images/kamakura-big-buddha.jpg', cap:'The Great Buddha of Kamakura'},
           {src:'images/kamakura-happy-buddha.jpg', cap:'Jizo statue, temple garden'},
-        ]},
-    ]
-  },
-  {
-    id:'puerto-rico', name:'Puerto Rico', iso:630, lat:18.2208, lng:-66.5901, color:'#A3CDC6',
-    regions:[
-      { id:'puerto-rico-all', name:'San Juan & El Yunque', lat:18.4, lng:-65.95,
-        photos:[
-          {src:'https://picsum.photos/seed/sanjuan1/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/sanjuan2/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/sanjuan3/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/sanjuan4/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/yunque1/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/yunque2/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/yunque3/900/1100', cap:'Replace with your own image — caption here'},
-          {src:'https://picsum.photos/seed/yunque4/900/1100', cap:'Replace with your own image — caption here'},
         ]},
     ]
   },
@@ -966,7 +973,11 @@ function ensureMapLoaded(){
   loadWorldGeometry().then(showWorld);
 }
 
-function renderNodeMobile(node, path){
+/* how many sub-collections a branch has (its direct children) — shown
+   under the name so a tap-worthy folder reads differently from a leaf. */
+function countCollections(node){ return node.regions.length; }
+
+function renderNodeMobile(node, path, countryIcons){
   if(node.photos){
     const thumb = node.photos[0].src;
     return `<div class="mnav-leaf" data-path="${path.join('|')}">
@@ -978,26 +989,60 @@ function renderNodeMobile(node, path){
       <span class="mnav-arrow">→</span>
     </div>`;
   }
-  const kids = node.regions.map(child=>renderNodeMobile(child, [...path, child.id])).join('');
-  const swatch = node.color ? `<span class="mnav-swatch" style="background:${node.color}"></span>` : '';
-  return `<details class="mnav-branch"><summary>${swatch}<span class="mnav-name">${node.name}</span></summary>
+  const kids = node.regions.map(child=>renderNodeMobile(child, [...path, child.id], countryIcons)).join('');
+  const isCountry = !!node.iso;
+  const icon = isCountry && countryIcons[node.id]
+    ? countryIcons[node.id]
+    : (node.color ? `<span class="mnav-swatch" style="background:${node.color}"></span>` : '');
+  const n = countCollections(node);
+  return `<details class="mnav-branch"><summary>${icon}
+    <div class="mnav-branch-info">
+      <span class="mnav-name">${node.name}</span>
+      <span class="mnav-count">${n} collection${n>1?'s':''}</span>
+    </div>
+    </summary>
     <div class="mnav-children">${kids}</div></details>`;
 }
 
-function buildMobileNav(){
-  if(mobileNavBuilt) return;
-  mobileNavBuilt = true;
+let mobileNavBuilding = null;
+async function buildMobileNav(){
+  if(mobileNavBuilt || mobileNavBuilding) return mobileNavBuilding;
   const root = $('#mobileNav');
-  root.innerHTML =
-    `<div class="mnav-head">
-      <div class="mnav-title">Where to</div>
-      <div class="mnav-sub">tap a country, then a place, to open its gallery</div>
-    </div>` + WORLD.map(c=>renderNodeMobile(c, [c.id])).join('');
-  root.addEventListener('click', (e)=>{
-    const leaf = e.target.closest('.mnav-leaf');
-    if(!leaf) return;
-    navigateTo(leaf.dataset.path.split('|'), leaf);
-  });
+  mobileNavBuilding = (async ()=>{
+    root.innerHTML = `<div class="mnav-head">
+        <div class="mnav-title">Where to?</div>
+        <div class="mnav-sub">tap a country, then a place, to open its gallery</div>
+      </div><div class="mnav-loading">Loading places…</div>`;
+
+    /* trace each active country's real border from a lightweight (110m,
+       icon-scale) world atlas — a separate, much smaller fetch than the
+       desktop map's 50m file, so mobile's first load stays light even
+       though it now draws little border icons too. */
+    let countryIcons = {};
+    try{
+      const topo = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(r=>r.json());
+      const geo = topojson.feature(topo, topo.objects.countries);
+      WORLD.forEach(c=>{
+        const feature = geo.features.find(f=>+f.id===c.iso);
+        if(!feature) return;
+        const proj = d3.geoMercator().fitSize([26,19], feature);
+        const d = d3.geoPath().projection(proj)(feature);
+        if(d) countryIcons[c.id] = `<svg class="mnav-flag" viewBox="0 0 26 19" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="${d}" fill="${c.color}"/></svg>`;
+      });
+    }catch(e){ /* offline or blocked — falls back to plain color dots below */ }
+
+    root.innerHTML = `<div class="mnav-head">
+        <div class="mnav-title">Where to?</div>
+        <div class="mnav-sub">tap a country, then a place, to open its gallery</div>
+      </div>` + WORLD.map(c=>renderNodeMobile(c, [c.id], countryIcons)).join('');
+    root.addEventListener('click', (e)=>{
+      const leaf = e.target.closest('.mnav-leaf');
+      if(!leaf) return;
+      navigateTo(leaf.dataset.path.split('|'), leaf);
+    });
+    mobileNavBuilt = true;
+  })();
+  return mobileNavBuilding;
 }
 
 function applyMode(){
