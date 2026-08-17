@@ -160,12 +160,21 @@
   }
   #galleryView.show{display:block;}
   .gallery-head{max-width:900px; margin:0 auto 40px;}
+  /* sticky + frosted, same trick as the mobile wordmark pill — the button
+     stays pinned near the top of the scrollable gallery and stays legible
+     over whatever photo happens to be scrolling underneath it, so there's
+     always a fast way back without scrolling all the way up. */
   .back-link{
+    position:sticky; top:18px; z-index:5;
     display:inline-flex; align-items:center; gap:6px; cursor:pointer;
     font-family:var(--font-mono); font-size:12px; color:var(--paper-dim);
-    margin-bottom:18px; transition:color .2s;
+    margin-bottom:18px; transition:color .2s, background .2s;
+    padding:8px 14px; margin-left:-14px;
+    border-radius:20px;
+    background:rgba(243,238,226,0.72);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
   }
-  .back-link:hover{color:var(--ink);}
+  .back-link:hover{color:var(--ink); background:rgba(243,238,226,0.9);}
   .gallery-head h1{
     font-family:var(--font-display); font-weight:500; font-size:42px; margin:0 0 6px;
   }
